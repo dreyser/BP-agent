@@ -43,8 +43,8 @@ app.use((req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 async function start() {
-  await connectMongo();
-
+  // Start HTTP server immediately so Azure health probe passes,
+  // then connect to MongoDB in the background
   app.listen(port, () => {
     console.log('');
     console.log('========================================');
@@ -65,6 +65,9 @@ async function start() {
     console.log(`  MONGODB_URI              : ${process.env.MONGODB_URI ? '✅ set' : '❌ not set'}`);
     console.log('========================================');
     console.log('');
+
+    // Connect to MongoDB after HTTP server is ready (non-blocking)
+    connectMongo().catch(e => console.error('MongoDB connect error:', e.message));
   });
 }
 
