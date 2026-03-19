@@ -26,13 +26,12 @@ export class ConversationManager {
   async saveConversation(conversation) {
     const db = getDb();
     if (db) {
+      // Exclude createdAt from $set — it's handled by $setOnInsert on first write only
+      const { createdAt: _createdAt, ...fields } = conversation;
       await db.collection(COLLECTION).updateOne(
         { contactPhone: conversation.contactPhone },
         {
-          $set: {
-            ...conversation,
-            updatedAt: new Date(),
-          },
+          $set: { ...fields, updatedAt: new Date() },
           $setOnInsert: { createdAt: new Date() },
         },
         { upsert: true }
