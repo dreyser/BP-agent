@@ -1,6 +1,5 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import { connectMongo } from './services/mongodb.js';
 import webhookRouter from './routes/webhook.js';
 
 dotenv.config();
@@ -26,12 +25,12 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
-    service: 'BP-agent WhatsApp Webhook',
+    service: 'BP-agent WhatsApp Webhook Relay',
     timestamp: new Date().toISOString(),
   });
 });
 
-// WhatsApp webhook (GET = verification, POST = messages)
+// WhatsApp webhook (GET = verification, POST = relay to web app)
 app.use('/webhook', webhookRouter);
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
@@ -42,36 +41,25 @@ app.use((req, res) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-async function start() {
-  // Start HTTP server immediately so Azure health probe passes,
-  // then connect to MongoDB in the background
-  app.listen(port, () => {
-    console.log('');
-    console.log('========================================');
-    console.log('🐼 BP-Agent WhatsApp Webhook Started');
-    console.log('========================================');
-    console.log(`📍 Port: ${port}`);
-    console.log('');
-    console.log('Endpoints:');
-    console.log('  GET  /health');
-    console.log('  GET  /webhook/whatsapp  (Meta verification)');
-    console.log('  POST /webhook/whatsapp  (Incoming messages)');
-    console.log('');
-    console.log('Config sources (priority: env > MongoDB settings):');
-    console.log(`  WHATSAPP_PHONE_NUMBER_ID : ${process.env.WHATSAPP_PHONE_NUMBER_ID ? '✅ set' : '⬜ from MongoDB'}`);
-    console.log(`  WHATSAPP_ACCESS_TOKEN    : ${process.env.WHATSAPP_ACCESS_TOKEN ? '✅ set' : '⬜ from MongoDB'}`);
-    console.log(`  WHATSAPP_VERIFY_TOKEN    : ${process.env.WHATSAPP_VERIFY_TOKEN ? '✅ set' : '⬜ from MongoDB'}`);
-    console.log(`  GEMINI_API_KEY           : ${process.env.GEMINI_API_KEY ? '✅ set' : '⬜ from MongoDB'}`);
-    console.log(`  MONGODB_URI              : ${process.env.MONGODB_URI ? '✅ set' : '❌ not set'}`);
-    console.log('========================================');
-    console.log('');
+const webappUrl = process.env.WEBAPP_URL || '';
 
-    // Connect to MongoDB after HTTP server is ready (non-blocking)
-    connectMongo().catch(e => console.error('MongoDB connect error:', e.message));
-  });
-}
-
-start().catch(err => {
-  console.error('Fatal startup error:', err);
-  process.exit(1);
+app.listen(port, () => {
+  console.log('');
+  console.log('========================================');
+  console.log('🐼 BP-Agent WhatsApp Webhook Relay');
+  console.log('========================================');
+  console.log(`📍 Port: ${port}`);
+  console.log('');
+  console.log('Endpoints:');
+  console.log('  GET  /health');
+  console.log('  GET  /webhook/whatsapp  (Meta verification)');
+  console.log('  POST /webhook/whatsapp  (Relay to web app)');
+  console.log('');
+  console.log('Config:');
+  console.log(`  WHATSAPP_PHONE_NUMBER_ID : ${process.env.WHATSAPP_PHONE_NUMBER_ID ? '✅ set' : '❌ not set'}`);
+  console.log(`  WHATSAPP_ACCESS_TOKEN    : ${process.env.WHATSAPP_ACCESS_TOKEN ? '✅ set' : '❌ not set'}`);
+  console.log(`  WHATSAPP_VERIFY_TOKEN    : ${process.env.WHATSAPP_VERIFY_TOKEN ? '✅ set' : '❌ not set'}`);
+  console.log(`  WEBAPP_URL               : ${webappUrl || '❌ not set — messages will NOT be forwarded'}`);
+  console.log('========================================');
+  console.log('');
 });
