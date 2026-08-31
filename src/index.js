@@ -9,7 +9,14 @@ const port = process.env.PORT || 8080;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
-app.use(express.json());
+// verify: captures the exact raw bytes into req.rawBody (alongside the
+// normal parsed req.body) so the Meta signature can be verified against
+// byte-exact input, and so the same bytes can be relayed onward unchanged.
+// limit: explicit, documented size bound, matching the main app (Session 4).
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => { req.rawBody = Buffer.from(buf); },
+}));
 
 // Request logger (skip high-frequency health checks)
 app.use((req, res, next) => {
