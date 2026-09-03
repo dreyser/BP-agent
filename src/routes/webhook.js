@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { WhatsAppService } from '../services/whatsapp.js';
+import { verifyMetaSignature } from '../middleware/metaSignature.js';
 
 const router = Router();
 
@@ -23,13 +24,17 @@ router.get('/whatsapp', (req, res) => {
 
 // ─── POST /webhook/whatsapp — Receive from Meta, relay to web app ─────────────
 //
-// BP-Agent is a thin relay. All AI reasoning and workflow execution happens
-// in the web app. This handler:
-//   1. Acknowledges Meta immediately (required within 20s)
-//   2. Marks incoming messages as "read" (good UX)
-//   3. Forwards the raw webhook payload to the web app
+// BP-Agent is a thin relay. All AI reasoning, tenant resolution, and
+// idempotency happen downstream in the main app (Session 4). This handler:
+//   1. Verifies the Meta signature (route middleware, runs first — rejects
+//      before any downstream side effect below)
+//   2. Acknowledges Meta immediately (required within 20s)
+//   3. Marks incoming messages as "read" (good UX)
+//   4. Forwards the exact original bytes + original signature header to the
+//      web app, which independently re-verifies the same signature against
+//      the same bytes
 
-router.post('/whatsapp', async (req, res) => {
+router.post('/whatsapp', verifyMetaSignature(() => process.env.FACEBOOK_APP_SECRET), async (req, res) => {
   // Acknowledge immediately — Meta requires 200 within 20 seconds
   res.sendStatus(200);
 
@@ -59,10 +64,18 @@ router.post('/whatsapp', async (req, res) => {
   }
 
   try {
+    // Forward the exact bytes Meta sent (and signed) — not a re-serialized
+    // JSON.stringify(req.body), which is not guaranteed to produce
+    // byte-identical output. The main app independently re-verifies
+    // x-hub-signature-256 against these same bytes, so the signature must
+    // travel with the exact body it was computed over.
     const response = await fetch(`${webappUrl}/webhook/whatsapp`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req.body),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hub-signature-256': req.headers['x-hub-signature-256'],
+      },
+      body: req.rawBody,
     });
     console.log(`✅ Forwarded to web app — HTTP ${response.status}`);
   } catch (e) {

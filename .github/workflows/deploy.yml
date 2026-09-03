@@ -6,7 +6,30 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  # Runs the real test suite with devDependencies installed. Deploy only
+  # proceeds if this job succeeds — see `needs: test` below. Kept as a
+  # separate job (not a step reused by deploy) so the deploy job can do a
+  # clean production-only install without ever having Vitest present.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm run test
+
+  deploy:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
@@ -18,7 +41,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install dependencies (production only)
         run: npm install --omit=dev
 
       # Requires GitHub secret: AZURE_CREDENTIALS
